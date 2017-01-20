@@ -51,11 +51,14 @@ function Process($localDBParam, $logFileNameParam) {
 
                             LogSave("Запрос данных из альты на $date", $logFileNameParam);
                             $data =  GetDataFromAltaByDateExecutor($prom, $date, $executorId, $getOnlyExtendedMaterial);
-                            LogSave("Данные из альты получены", $logFileNameParam);
+                            if ($data != null)
+                            {
+                                LogSave("Данные из альты получены", $logFileNameParam);
 
-                            LogSave("Начало загрузки данных", $logFileNameParam);
-                            SkladDBUpdate($localDBParam, $data, $logFileNameParam);
-                            LogSave("Конец загрузки данных", $logFileNameParam);
+                                LogSave("Начало загрузки данных", $logFileNameParam);
+                                SkladDBUpdate($localDBParam, $data, $logFileNameParam);
+                                LogSave("Конец загрузки данных", $logFileNameParam);
+                            }
                         }
 
                         $stop = date($format);
@@ -183,7 +186,6 @@ function GetNotProcessCacheBarcodesId($localDBParam) {
     $trans = ibase_trans($localDBParam);
     // выберем id необработанных штрихкодов (processdatetime is null и docacceptelementid is null)
     $query_text = "select cachebarcodesid from cachebarcodes where processdatetime is null and docacceptelementid is null";
-    //$query = ibase_prepare($localDBParam, $query_text);
     $query = PrepareQuery($localDBParam, $trans, $query_text);
     if ($query) {
         $res = ibase_execute($query);
@@ -195,6 +197,8 @@ function GetNotProcessCacheBarcodesId($localDBParam) {
                 $row = ibase_fetch_row($res);
             }
 
+            ibase_commit($trans);
+
             return $ret;
         }
         else {
@@ -204,7 +208,6 @@ function GetNotProcessCacheBarcodesId($localDBParam) {
     else {
         throw new Exception("Не удалось подготовить запрос. " . $query_text);
     }
-    ibase_commit($trans);
 }
 
 // массив штрихкодов по массиву cachebarcodesid
@@ -303,7 +306,7 @@ function SkladDBUpdate($localDBParam, $resAltaParam, $logFileNameParam) {
     // массив key->value подготовленых запросов
     // key - текст запроса
     // value - подготовленый запрос
-    $prepareQuerys = array();
+    //$prepareQuerys = array();
 
     // очистим временную таблицу
     ClearTempTrips($localDBParam, $trans);
@@ -400,10 +403,11 @@ function SkladDBUpdate($localDBParam, $resAltaParam, $logFileNameParam) {
 
                         // ищем штрихкод во временной таблице
                         $index = SearchBarcode($barcode, $arrayBarcodes);
-                        // штрихкод не найден?						
+                        // штрихкод не найден?
                         if ($index === false) {
                             // добавим штрихкод на склад
-                            $barcodeId = UpdateOrInsertBarcode($localDBParam, $trans, $elementId, $barcode);
+                            //$barcodeId = UpdateOrInsertBarcode($localDBParam, $trans, $elementId, $barcode);
+                            UpdateOrInsertBarcode($localDBParam, $trans, $elementId, $barcode);
                         }
                         else {
                             // штрихкод найден, значит он есть на складе. удалим его из массива
@@ -875,22 +879,20 @@ function GetDataFromAltaByDateExecutor($promDBParam, $dateTimeParam, $executorId
     // чтобы получать данные из временной таблицы надо находится в
     // той же транзакции в которой происходит заполненеие временной таблицы
     // т.к. после закрытия транзакции временная таблица очищается
-
- 
     $query_text = "insert into my_temp2 (tmp_int)
         select o.orderid
         from executors e
         join dirdates d on e.executorid = d.executorid
         join orders o on d.dirdatesid = o.my_dirdatesid
-        where e.executorid = $executorIdParam
+        where e.executorid = ?
         and o.customerid not in (22, 987)
         and o.deleted is null
-        and d.plan_date = '$dateTimeParam'
+        and d.plan_date = ?
         group by orderid";
 
     $query = ibase_prepare($promDBParam, $query_text);
     if ($query) {
-        $res = ibase_execute($query);
+        $res = ibase_execute($query, $executorIdParam, $dateTimeParam);
         if ($res) {
             return GetDataFromAlta($promDBParam, $getOnlyExtendedMaterilaParam);
         }
@@ -914,7 +916,7 @@ function GetDataFromAltaByBarcodesId($promDBParam, $localDBParam, $arrayBarcodes
     // которые соответствуют штрихкодам из массива $arrayBarcodesParam
     foreach($arrayBarcodes as $index => $item)
     {
-        $isUpdate = false;
+        //$isUpdate = false;
         $orderId = GetOrderByBarcode($promDBParam, $item);
         if ($orderId) {
             array_push($arrayOrders, $orderId);
@@ -947,6 +949,8 @@ function GetDataFromAltaByBarcodesId($promDBParam, $localDBParam, $arrayBarcodes
 
         return GetDataFromAlta($promDBParam, $getOnlyExtendedMaterialParam);
     }
+    
+    return null;
 }
 
 function GenId($dbParam, $transParam, $generator) {
@@ -1526,7 +1530,7 @@ function SelectTempTrips($dbParam, $transParam) {
 // возвращает id заказа по штрихкоду (Рома)
 function GetOrderByBarcode($dbParam, $barcodeParam) {
     if (preg_match("/^777(\d{9})(\d{2})(\d)(\d{2})(\d{2})$/", $barcodeParam, $matches)) {
-        $CodeType = 'ms';
+        //$CodeType = 'ms';
         $orderitemsid = $matches[1];
         $modelno = $matches[2];
         $sprpartid = $matches[3];
@@ -1545,7 +1549,7 @@ function GetOrderByBarcode($dbParam, $barcodeParam) {
 			and ms.itemno = $itemno";
     }
     else if (preg_match("/^888(\d{9})$/", $barcodeParam, $matches)) {
-        $CodeType = 'gp';
+        //$CodeType = 'gp';
         $modelitemsid = $matches[1];
         $sql = "select first 1 who.orderid
             from ct_elements e
@@ -1556,7 +1560,7 @@ function GetOrderByBarcode($dbParam, $barcodeParam) {
             and e.cttypeelemsid = 6";
     }
     else if (preg_match("/^555(\d{9})$/", $barcodeParam, $matches)) {
-        $CodeType = 'dop';
+        //$CodeType = 'dop';
         $cte = $matches[1];
         $sql = "select first 1 who.orderid
 			from ct_elements e
@@ -1567,7 +1571,7 @@ function GetOrderByBarcode($dbParam, $barcodeParam) {
 			and e.cttypeelemsid in (1, 9, 10)";
     }
     else if (preg_match("/^.*?(\d{1,9})$/", $barcodeParam, $matches)) {
-        $CodeType = 'izd';
+        //$CodeType = 'izd';
         $stvorkaid = $matches[1];
         $sql = "select first 1 who.orderid
 			, mi.modelitemsid
@@ -1649,7 +1653,7 @@ function Soap($dbParam) {
                     $conf = SelectConf($dbParam);
                     if ($conf != null) {
                         try {
-                            $object = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><elements/>');
+                           new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><elements/>');
 
                             $ii = 0;
                             //while ($row != false) {
@@ -1694,7 +1698,7 @@ function Soap($dbParam) {
                                 $client = new SoapClient("http://localhost/test.php", array("login"=>"WSclient", "password"=>"masterkey", "trace" => 1));
                                 $res = $client->djinn($params);
 
-                                $xxx = $client->__getLastRequest();
+                                $client->__getLastRequest();
 
 
                                 $xml = new SimpleXMLElement($res->param2);
@@ -1790,7 +1794,7 @@ function InsertLogs1c($dbParam) {
 function UpdateLogs1c($dbParam, $log1cIdParam, $errorParam) {
     try {
         $query = "update logs1c set enddate = CURRENT_TIMESTAMP, error = ? where log1cid = ?";
-        $res = ibase_query($dbParam, $query, $errorParam, $log1cIdParam) or die (ibase_errmsg());
+        ibase_query($dbParam, $query, $errorParam, $log1cIdParam) or die (ibase_errmsg());
     }
     catch (Exception $e) {
         throw $e;
