@@ -1,5 +1,5 @@
 # phpservice
 
-<b>PHP service for upload data to remote db</b>
+<b>PHP service upload data to remote db</b>
 
 &bull; PHP#
