@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 $prepareQuerys = array();
 
@@ -23,7 +23,7 @@ function Start($connectionStringParam, $userNameParam, $passwordParam, $logFileN
 }
 
 function Process($localDBParam, $logFileNameParam) {
-    $prom = ibase_pconnect('alta.steklodom.local:prom', 'MASTER', '1');
+    $prom = ibase_pconnect('***', '***', '***');
     if ($prom) {
         $format = GetDateFormat();
         $shortFormat = GetShortDateFormat();
